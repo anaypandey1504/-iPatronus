@@ -1,7 +1,6 @@
 'use client';
 
-import { DailyProvider } from '@daily-co/daily-react';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 
 interface CallRoomProps {
   url: string;
