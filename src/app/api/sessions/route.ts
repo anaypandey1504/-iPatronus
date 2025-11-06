@@ -1,57 +1,37 @@
-import prisma from '@/lib/utils/db';
-import { v4 as uuidv4 } from 'uuid';
 import { NextResponse } from 'next/server';
-import { headers } from 'next/headers';
-import { verifyToken } from '@/lib/utils/auth';
+import { createSession, getSessions, updateSessionStatus } from '@/lib/utils/fakeDb';
+
+export async function GET() {
+  try {
+    const sessions = getSessions();
+    return NextResponse.json({ sessions });
+  } catch (error) {
+    console.error('Error fetching sessions:', error);
+    return NextResponse.json(
+      { message: 'Something went wrong' },
+      { status: 500 }
+    );
+  }
+}
 
 export async function POST(request: Request) {
   try {
-    const headersList = await headers();
-    const cookie = headersList.get('cookie') || '';
-    const token = cookie.split('token=')[1];
-
-    if (!token) {
+    const { doctorId, patientId } = await request.json();
+    
+    if (!doctorId || !patientId) {
       return NextResponse.json(
-        { message: 'Unauthorized' },
-        { status: 401 }
+        { message: 'Missing required fields' },
+        { status: 400 }
       );
     }
 
-    const decoded = verifyToken(token);
-
-    if (!decoded) {
-      return NextResponse.json(
-        { message: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    const { patientId, accepted } = await request.json();
-
-    if (!accepted) {
-      const session = await prisma.session.create({
-        data: {
-          doctorId: decoded.id,
-          patientId,
-          roomId: uuidv4(),
-          status: 'REJECTED',
-        },
-      });
-
-      return NextResponse.json({ session });
-    }
-
-    const session = await prisma.session.create({
-      data: {
-        doctorId: decoded.id,
-        patientId,
-        roomId: uuidv4(),
-        status: 'ACCEPTED',
-      },
+    const session = createSession(doctorId, patientId);
+    
+    return NextResponse.json({ 
+      session,
+      roomUrl: `/call/${session.roomId}`
     });
-
-    return NextResponse.json({ session });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error creating session:', error);
     return NextResponse.json(
       { message: 'Something went wrong' },

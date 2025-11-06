@@ -1,16 +1,15 @@
 'use client';
 
 import { Button } from '@/components/Button';
-import { useSocket } from '@/lib/hooks/useSocket';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-interface User {
+type DoctorStatus = 'AVAILABLE' | 'NOT_AVAILABLE' | 'BUSY';
+
+interface Doctor {
   id: string;
   name: string;
-  email: string;
-  role: string;
-  status: string;
+  status: DoctorStatus;
 }
 
 interface ConnectionRequest {
@@ -18,38 +17,58 @@ interface ConnectionRequest {
   patientName: string;
 }
 
+interface User {
+  id: string;
+  name: string;
+  status: DoctorStatus;
+}
+
 export default function DoctorDashboard() {
   const router = useRouter();
-  const socket = useSocket();
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [user, setUser] = useState<User | null>(null);
+  const [currentDoctor, setCurrentDoctor] = useState<Doctor | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [connectionRequest, setConnectionRequest] = useState<ConnectionRequest | null>(null);
 
   useEffect(() => {
-    async function fetchUser() {
-      try {
-        const res = await fetch('/api/user');
-        const data = await res.json();
+    // In a real app, you would get the current doctor from the session
+    // For now, we'll use the first doctor as the current user
+    fetchDoctors();
+  }, []);
 
-        if (!res.ok) {
-          throw new Error(data.message || 'Failed to fetch user');
-        }
-
-        if (data.user.role !== 'DOCTOR') {
-          router.push('/patient');
-          return;
-        }
-
-        setUser(data.user);
-      } catch (error) {
-        router.push('/auth/login');
+  const fetchDoctors = async () => {
+    try {
+      const response = await fetch('/api/doctors');
+      const data = await response.json();
+      if (data.doctors && data.doctors.length > 0) {
+        setDoctors(data.doctors);
+        // Set the first doctor as the current user for demo purposes
+        setCurrentDoctor(data.doctors[0]);
+        setUser(data.doctors[0]);
       }
+    } catch (error) {
+      console.error('Error fetching doctors:', error);
+    } finally {
+      setIsLoading(false);
     }
-
-    fetchUser();
-  }, [router]);
+  };
 
   useEffect(() => {
-    if (!socket || !user) return;
+    if (!user) return;
+
+    const socket = {
+      emit: (event: string, data: any) => {
+        console.log(`Emitting event: ${event} with data: ${JSON.stringify(data)}`);
+      },
+      on: (event: string, callback: (data: any) => void) => {
+        console.log(`Listening for event: ${event}`);
+        callback({ patientId: '123', patientName: 'John Doe' });
+      },
+      off: (event: string) => {
+        console.log(`Removing listener for event: ${event}`);
+      },
+    };
 
     socket.emit('join-room', user.id);
 
@@ -60,7 +79,7 @@ export default function DoctorDashboard() {
     return () => {
       socket.off('incoming-connection');
     };
-  }, [socket, user]);
+  }, [user]);
 
   async function toggleAvailability() {
     if (!user) return;

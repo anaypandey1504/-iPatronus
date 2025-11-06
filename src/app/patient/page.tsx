@@ -1,59 +1,29 @@
 'use client';
 
-import { Button } from '@/components/Button';
-import { useSocket } from '@/lib/hooks/useSocket';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-interface User {
+type DoctorStatus = 'AVAILABLE' | 'NOT_AVAILABLE' | 'BUSY';
+
+interface Doctor {
   id: string;
   name: string;
-  email: string;
-  role: string;
+  status: DoctorStatus;
 }
 
-interface Doctor extends User {
-  status: string;
+interface Patient {
+  id: string;
+  name: string;
 }
 
 export default function PatientDashboard() {
   const router = useRouter();
-  const socket = useSocket();
-  const [user, setUser] = useState<User | null>(null);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [currentPatient] = useState<Patient>({ id: 'pat1', name: 'John Doe' }); // Mock patient
   const [requestedDoctorId, setRequestedDoctorId] = useState<string | null>(null);
 
   useEffect(() => {
-    async function fetchUser() {
-      try {
-        const res = await fetch('/api/user');
-        const data = await res.json();
-
-        if (!res.ok) {
-          throw new Error(data.message || 'Failed to fetch user');
-        }
-
-        if (data.user.role !== 'PATIENT') {
-          router.push('/doctor');
-          return;
-        }
-
-        setUser(data.user);
-      } catch (error) {
-        router.push('/auth/login');
-      }
-    }
-
-    fetchUser();
-  }, [router]);
-
-  useEffect(() => {
-    async function fetchDoctors() {
-      try {
-        const res = await fetch('/api/doctors');
-        const data = await res.json();
-
-        if (!res.ok) {
           throw new Error(data.message || 'Failed to fetch doctors');
         }
 
