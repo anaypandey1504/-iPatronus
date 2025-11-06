@@ -1,60 +1,66 @@
-'use client';
+import { headers } from 'next/headers';
+import { redirect } from 'next/navigation';
+import CallClient from './CallClient';
 
-import { useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+export default async function CallPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ room: string }>;
+  searchParams: Promise<{ url?: string }>;
+}) {
+  const { room } = await params;
+  const { url: roomUrl } = await searchParams;
 
-interface CallPageProps {
-  params: {
-    room: string;
-  };
-}
+  // Build absolute base URL for internal fetches
+  const h = await headers();
+  const host = h.get('x-forwarded-host') || h.get('host');
+  const proto = h.get('x-forwarded-proto') || 'http';
+  const base = `${proto}://${host}`;
 
-export default function CallPage({ params }: CallPageProps) {
-  const router = useRouter();
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const roomId = params.room;
-
-  useEffect(() => {
-    // Set up the Daily iframe
-    if (iframeRef.current) {
-      iframeRef.current.src = `https://your-daily-domain.daily.co/${roomId}`;
+  try {
+    // If we already have a full Daily room URL, skip validation
+    if (roomUrl) {
+      return <CallClient room={room} roomUrl={roomUrl} />;
     }
 
-    // Handle beforeunload to clean up
-    const handleBeforeUnload = () => {
-      // You can add cleanup logic here if needed
-    };
+    // Validate room existence with Daily via our API
+    const validateRes = await fetch(
+      `${base}/api/daily/validate-room?name=${encodeURIComponent(room)}`,
+      { cache: 'no-store' }
+    );
 
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-    };
-  }, [roomId]);
+    if (validateRes.status === 404) {
+      // Create a new room if not found, then redirect
+      const createRes = await fetch(`${base}/api/daily/create-room`, {
+        method: 'POST',
+        cache: 'no-store',
+      });
+      if (!createRes.ok) {
+        throw new Error('Failed to create Daily room');
+      }
+      const data = await createRes.json();
+      const newName: string | undefined = data?.room?.name;
+      if (!newName) throw new Error('Daily room name missing');
+      redirect(`/call/${newName}`);
+    }
 
-  const handleLeaveCall = () => {
-    // Navigate back to the previous page
-    router.push('/');
-  };
+    if (!validateRes.ok) {
+      throw new Error('Failed to validate Daily room');
+    }
 
-  return (
-    <div className="flex flex-col h-screen bg-gray-900">
-      <div className="flex justify-between items-center p-4 bg-gray-800 text-white">
-        <h1 className="text-xl font-bold">Video Consultation</h1>
-        <button
-          onClick={handleLeaveCall}
-          className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
-        >
-          Leave Call
-        </button>
+    // Room exists; prefer the exact URL from Daily validation response
+    const validated = await validateRes.json();
+    const validatedUrl: string | undefined = validated?.room?.url;
+    return <CallClient room={room} roomUrl={validatedUrl} />;
+  } catch (e) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-900 text-white">
+        <div className="text-center space-y-3">
+          <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-500 mx-auto" />
+          <p className="text-lg">Unable to start meeting, please retry.</p>
+        </div>
       </div>
-      
-      <div className="flex-1 relative">
-        <iframe
-          ref={iframeRef}
-          className="w-full h-full border-0"
-          allow="camera;microphone;display-capture"
-        />
-      </div>
-    </div>
-  );
+    );
+  }
 }

@@ -1,28 +1,12 @@
-import prisma from '@/lib/utils/db';
 import { NextResponse } from 'next/server';
+import { getSessionByRoomId, updateSessionStatus } from '@/lib/utils/fakeDb';
 
 export async function GET(
   request: Request,
   { params }: { params: { roomId: string } }
 ) {
   try {
-    const session = await prisma.session.findUnique({
-      where: { roomId: params.roomId },
-      include: {
-        doctor: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        patient: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-    });
+    const session = getSessionByRoomId(params.roomId);
 
     if (!session) {
       return NextResponse.json(
@@ -47,27 +31,23 @@ export async function PUT(
 ) {
   try {
     const { status } = await request.json();
+    const current = getSessionByRoomId(params.roomId);
+    if (!current) {
+      return NextResponse.json(
+        { message: 'Session not found' },
+        { status: 404 }
+      );
+    }
 
-    const session = await prisma.session.update({
-      where: { roomId: params.roomId },
-      data: { status },
-      include: {
-        doctor: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        patient: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-    });
+    const updated = updateSessionStatus(current.id, status);
+    if (!updated) {
+      return NextResponse.json(
+        { message: 'Failed to update session' },
+        { status: 400 }
+      );
+    }
 
-    return NextResponse.json({ session });
+    return NextResponse.json({ session: updated });
   } catch (error: any) {
     console.error('Error updating session:', error);
     return NextResponse.json(

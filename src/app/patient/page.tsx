@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Button } from '@/components/Button';
+import { useSocket } from '@/lib/hooks/useSocket';
 
 type DoctorStatus = 'AVAILABLE' | 'NOT_AVAILABLE' | 'BUSY';
 
@@ -18,77 +20,70 @@ interface Patient {
 
 export default function PatientDashboard() {
   const router = useRouter();
+  const socket = useSocket();
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [currentPatient] = useState<Patient>({ id: 'pat1', name: 'John Doe' }); // Mock patient
+  const [patient] = useState<Patient>({ id: 'pat1', name: 'John Doe' });
   const [requestedDoctorId, setRequestedDoctorId] = useState<string | null>(null);
 
   useEffect(() => {
+    async function fetchDoctors() {
+      try {
+        const res = await fetch('/api/doctors');
+        const data = await res.json();
+        if (!res.ok) {
           throw new Error(data.message || 'Failed to fetch doctors');
         }
-
         setDoctors(data.doctors);
       } catch (error) {
         console.error('Failed to fetch doctors:', error);
+      } finally {
+        setIsLoading(false);
       }
     }
-
     fetchDoctors();
   }, []);
 
   useEffect(() => {
-    if (!socket || !user) return;
+    if (!socket) return;
+    // Join own room to receive targeted events
+    socket.emit('join-room', patient.id);
 
-    socket.on('user-status-update', ({ userId, status }) => {
-      setDoctors((prev) =>
-        prev.map((doctor) =>
-          doctor.id === userId ? { ...doctor, status } : doctor
-        )
-      );
+    socket.on('user-status-update', ({ userId, status }: { userId: string; status: DoctorStatus }) => {
+      setDoctors((prev) => prev.map((d) => (d.id === userId ? { ...d, status } : d)));
+    });
+
+    socket.on('call-accepted', ({ roomName, roomUrl }: { roomName: string; roomUrl?: string }) => {
+      if (roomUrl) {
+        router.push(`/call/${roomName}?url=${encodeURIComponent(roomUrl)}`);
+      } else {
+        router.push(`/call/${roomName}`);
+      }
     });
 
     return () => {
       socket.off('user-status-update');
+      socket.off('call-accepted');
     };
-  }, [socket, user]);
+  }, [socket, patient.id, router]);
 
   async function requestConnection(doctorId: string) {
-    if (!user) return;
+    if (!socket) return;
 
     try {
       setRequestedDoctorId(doctorId);
-
-        if (!socket) {
-          throw new Error('Socket connection not established');
-        }
-
-        socket.emit('connection-request', {
-          doctorId,
-          patientId: user.id,
-          patientName: user.name,
-        });
-
-      // Wait for response
-      const res = await fetch('/api/sessions/status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ doctorId }),
+      socket.emit('connection-request', {
+        doctorId,
+        patientId: patient.id,
+        patientName: patient.name,
       });
-
-      const data = await res.json();
-
-      if (data.session.status === 'ACCEPTED') {
-        router.push(`/call/${data.session.roomId}`);
-      } else {
-        setRequestedDoctorId(null);
-      }
     } catch (error) {
       console.error('Failed to request connection:', error);
       setRequestedDoctorId(null);
     }
   }
 
-  if (!user) {
+  if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500" />
@@ -100,7 +95,7 @@ export default function PatientDashboard() {
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-4xl mx-auto space-y-8">
         <div className="bg-white p-6 rounded-xl shadow-lg">
-          <h1 className="text-2xl font-bold mb-2">Welcome, {user.name}</h1>
+          <h1 className="text-2xl font-bold mb-2">Welcome, {patient.name}</h1>
           <p className="text-gray-600">
             Find an available doctor below to start a consultation
           </p>

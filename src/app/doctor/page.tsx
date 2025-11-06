@@ -3,6 +3,7 @@
 import { Button } from '@/components/Button';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSocket } from '@/lib/hooks/useSocket';
 
 type DoctorStatus = 'AVAILABLE' | 'NOT_AVAILABLE' | 'BUSY';
 
@@ -25,6 +26,7 @@ interface User {
 
 export default function DoctorDashboard() {
   const router = useRouter();
+  const socket = useSocket();
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [user, setUser] = useState<User | null>(null);
   const [currentDoctor, setCurrentDoctor] = useState<Doctor | null>(null);
@@ -55,20 +57,7 @@ export default function DoctorDashboard() {
   };
 
   useEffect(() => {
-    if (!user) return;
-
-    const socket = {
-      emit: (event: string, data: any) => {
-        console.log(`Emitting event: ${event} with data: ${JSON.stringify(data)}`);
-      },
-      on: (event: string, callback: (data: any) => void) => {
-        console.log(`Listening for event: ${event}`);
-        callback({ patientId: '123', patientName: 'John Doe' });
-      },
-      off: (event: string) => {
-        console.log(`Removing listener for event: ${event}`);
-      },
-    };
+    if (!user || !socket) return;
 
     socket.emit('join-room', user.id);
 
@@ -79,7 +68,7 @@ export default function DoctorDashboard() {
     return () => {
       socket.off('incoming-connection');
     };
-  }, [user]);
+  }, [user, socket]);
 
   async function toggleAvailability() {
     if (!user) return;
@@ -87,7 +76,7 @@ export default function DoctorDashboard() {
     const newStatus = user.status === 'AVAILABLE' ? 'NOT_AVAILABLE' : 'AVAILABLE';
 
     try {
-      const res = await fetch('/api/user/status', {
+      const res = await fetch('/api/user', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
@@ -110,26 +99,27 @@ export default function DoctorDashboard() {
     if (!connectionRequest || !user) return;
 
     try {
-      const res = await fetch('/api/sessions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          patientId: connectionRequest.patientId,
-          accepted: accept,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.message || 'Failed to handle connection');
-      }
-
       if (accept) {
-        router.push(`/call/${data.session.roomId}`);
-      }
+        // Create Daily room
+        const res = await fetch('/api/daily/create-room', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Failed to create room');
 
-      setConnectionRequest(null);
+        const roomName: string = data.room?.name;
+        if (!roomName) throw new Error('Daily room name missing');
+        const roomUrl: string | undefined = data.room?.url;
+        if (!roomUrl) throw new Error('Daily room url missing');
+        // Notify patient
+        socket?.emit('call-accepted', {
+          patientId: connectionRequest.patientId,
+          roomName,
+          roomUrl,
+        });
+        // Redirect doctor
+        router.push(`/call/${roomName}?url=${encodeURIComponent(roomUrl)}`);
+      } else {
+        setConnectionRequest(null);
+      }
     } catch (error) {
       console.error('Failed to handle connection:', error);
     }

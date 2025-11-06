@@ -1,0 +1,3 @@
+Open two browser windows:
+Window A: http://localhost:3000/doctor
+Window B: http://localhost:3000/patient

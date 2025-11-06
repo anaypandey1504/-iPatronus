@@ -38,7 +38,8 @@ export function initSocketServer(server: NetServer) {
       addTrailingSlash: false,
     });
 
-    io.on('connection', (socket) => {
+    io.on('connection', (socket: any) => {
+      // Using 'any' compatible typing for runtime socket; explicit payloads typed below
       console.log('Client connected:', socket.id);
 
       socket.on('join-room', (roomId: string) => {
@@ -59,9 +60,17 @@ export function initSocketServer(server: NetServer) {
         });
       });
 
-      socket.on('status-change', ({ userId, status }) => {
+      socket.on('status-change', ({ userId, status }: { userId: string; status: 'AVAILABLE' | 'NOT_AVAILABLE' | 'BUSY' }) => {
         io.emit('user-status-update', { userId, status });
       });
+
+      // Relay when a doctor accepts a call to the specific patient room
+      socket.on(
+        'call-accepted',
+        ({ patientId, roomName, roomUrl }: { patientId: string; roomName: string; roomUrl: string }) => {
+          io.to(patientId).emit('call-accepted', { roomName, roomUrl });
+        }
+      );
 
       socket.on('disconnect', () => {
         console.log('Client disconnected:', socket.id);
