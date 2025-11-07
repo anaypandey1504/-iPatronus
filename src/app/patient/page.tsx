@@ -46,24 +46,45 @@ export default function PatientDashboard() {
 
   useEffect(() => {
     if (!socket) return;
-    // Join own room to receive targeted events
+
     socket.emit('join-room', patient.id);
 
-    socket.on('user-status-update', ({ userId, status }: { userId: string; status: DoctorStatus }) => {
+    const handleStatusUpdate = ({
+      userId,
+      status,
+    }: {
+      userId: string;
+      status: DoctorStatus;
+    }) => {
       setDoctors((prev) => prev.map((d) => (d.id === userId ? { ...d, status } : d)));
-    });
+    };
 
-    socket.on('call-accepted', ({ roomName, roomUrl }: { roomName: string; roomUrl?: string }) => {
+    const handleCallAccepted = ({
+      patientId,
+      roomName,
+      roomUrl,
+    }: {
+      patientId: string;
+      roomName: string;
+      roomUrl?: string;
+    }) => {
+      if (patientId !== patient.id) return;
+
+      setRequestedDoctorId(null);
+
       if (roomUrl) {
         router.push(`/call/${roomName}?url=${encodeURIComponent(roomUrl)}`);
       } else {
         router.push(`/call/${roomName}`);
       }
-    });
+    };
+
+    socket.on('USER_STATUS_UPDATE', handleStatusUpdate);
+    socket.on('CALL_ACCEPTED', handleCallAccepted);
 
     return () => {
-      socket.off('user-status-update');
-      socket.off('call-accepted');
+      socket.off('USER_STATUS_UPDATE', handleStatusUpdate);
+      socket.off('CALL_ACCEPTED', handleCallAccepted);
     };
   }, [socket, patient.id, router]);
 
@@ -72,7 +93,7 @@ export default function PatientDashboard() {
 
     try {
       setRequestedDoctorId(doctorId);
-      socket.emit('connection-request', {
+      socket.emit('REQUEST_CALL', {
         doctorId,
         patientId: patient.id,
         patientName: patient.name,

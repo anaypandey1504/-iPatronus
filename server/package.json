@@ -1,0 +1,11 @@
+{
+  "name": "pipecat-socket-server",
+  "version": "0.1.0",
+  "private": true,
+  "main": "socket.js",
+  "scripts": {
+    "start": "node server/socket.js"
+  }
+}
+
+

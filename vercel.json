@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "builds": [
+    { "src": "next.config.js", "use": "@vercel/next" }
+  ],
+  "env": {
+    "DAILY_API_KEY": "1b9d1af09a680a74d9ac65368468b78338299aa818a03b3543c2879ff5f21e4a"
+  },
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/" }
+  ]
+}

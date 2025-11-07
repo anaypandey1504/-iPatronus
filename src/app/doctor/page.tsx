@@ -1,9 +1,9 @@
 'use client';
 
 import { Button } from '@/components/Button';
+import { useSocket } from '@/lib/hooks/useSocket';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSocket } from '@/lib/hooks/useSocket';
 
 type DoctorStatus = 'AVAILABLE' | 'NOT_AVAILABLE' | 'BUSY';
 
@@ -14,6 +14,7 @@ interface Doctor {
 }
 
 interface ConnectionRequest {
+  doctorId: string;
   patientId: string;
   patientName: string;
 }
@@ -29,24 +30,24 @@ export default function DoctorDashboard() {
   const socket = useSocket();
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [user, setUser] = useState<User | null>(null);
-  const [currentDoctor, setCurrentDoctor] = useState<Doctor | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [connectionRequest, setConnectionRequest] = useState<ConnectionRequest | null>(null);
 
   useEffect(() => {
-    // In a real app, you would get the current doctor from the session
-    // For now, we'll use the first doctor as the current user
     fetchDoctors();
   }, []);
 
-  const fetchDoctors = async () => {
+  async function fetchDoctors() {
     try {
       const response = await fetch('/api/doctors');
       const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to load doctors');
+      }
+
+      setDoctors(data.doctors || []);
       if (data.doctors && data.doctors.length > 0) {
-        setDoctors(data.doctors);
-        // Set the first doctor as the current user for demo purposes
-        setCurrentDoctor(data.doctors[0]);
         setUser(data.doctors[0]);
       }
     } catch (error) {
@@ -54,81 +55,125 @@ export default function DoctorDashboard() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }
 
   useEffect(() => {
-    if (!user || !socket) return;
+    if (!socket || !user) return;
 
     socket.emit('join-room', user.id);
 
-    socket.on('incoming-connection', (data: ConnectionRequest) => {
-      setConnectionRequest(data);
-    });
+    const handleIncomingRequest = (payload: ConnectionRequest) => {
+      if (payload.doctorId !== user.id) return;
+      setConnectionRequest(payload);
+    };
+
+    const handleStatusUpdate = ({
+      userId,
+      status,
+    }: {
+      userId: string;
+      status: DoctorStatus;
+    }) => {
+      setDoctors((prev) =>
+        prev.map((doctor) => (doctor.id === userId ? { ...doctor, status } : doctor))
+      );
+
+      if (userId === user.id) {
+        setUser((prev) => (prev ? { ...prev, status } : prev));
+      }
+    };
+
+    socket.on('INCOMING_REQUEST', handleIncomingRequest);
+    socket.on('USER_STATUS_UPDATE', handleStatusUpdate);
 
     return () => {
-      socket.off('incoming-connection');
+      socket.off('INCOMING_REQUEST', handleIncomingRequest);
+      socket.off('USER_STATUS_UPDATE', handleStatusUpdate);
     };
-  }, [user, socket]);
+  }, [socket, user]);
 
   async function toggleAvailability() {
-    if (!user) return;
+    if (!user || !socket) return;
 
     const newStatus = user.status === 'AVAILABLE' ? 'NOT_AVAILABLE' : 'AVAILABLE';
 
     try {
-      const res = await fetch('/api/user', {
+      const res = await fetch('/api/user/status', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
       });
-
       const data = await res.json();
 
       if (!res.ok) {
         throw new Error(data.message || 'Failed to update status');
       }
 
-      setUser((prev) => prev ? { ...prev, status: newStatus } : null);
-      socket?.emit('status-change', { userId: user.id, status: newStatus });
+      setUser((prev) => (prev ? { ...prev, status: newStatus } : prev));
+      socket.emit('USER_STATUS_CHANGE', { userId: user.id, status: newStatus });
     } catch (error) {
       console.error('Failed to toggle availability:', error);
     }
   }
 
   async function handleConnectionResponse(accept: boolean) {
-    if (!connectionRequest || !user) return;
+    if (!connectionRequest || !user || !socket) return;
+
+    if (!accept) {
+      setConnectionRequest(null);
+      return;
+    }
 
     try {
-      if (accept) {
-        // Create Daily room
-        const res = await fetch('/api/daily/create-room', { method: 'POST' });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.message || 'Failed to create room');
-
-        const roomName: string = data.room?.name;
-        if (!roomName) throw new Error('Daily room name missing');
-        const roomUrl: string | undefined = data.room?.url;
-        if (!roomUrl) throw new Error('Daily room url missing');
-        // Notify patient
-        socket?.emit('call-accepted', {
+      const res = await fetch('/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          doctorId: user.id,
           patientId: connectionRequest.patientId,
-          roomName,
-          roomUrl,
-        });
-        // Redirect doctor
-        router.push(`/call/${roomName}?url=${encodeURIComponent(roomUrl)}`);
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to create session');
+      }
+
+      socket.emit('CALL_ACCEPTED', {
+        doctorId: user.id,
+        patientId: connectionRequest.patientId,
+        roomName: data.session.roomId,
+        roomUrl: data.roomUrl,
+      });
+
+      setConnectionRequest(null);
+
+      if (data.roomUrl) {
+        router.push(`/call/${data.session.roomId}?url=${encodeURIComponent(data.roomUrl)}`);
       } else {
-        setConnectionRequest(null);
+        router.push(`/call/${data.session.roomId}`);
       }
     } catch (error) {
       console.error('Failed to handle connection:', error);
     }
   }
 
-  if (!user) {
+  if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="bg-white p-6 rounded-xl shadow-lg text-center">
+          <h2 className="text-xl font-semibold mb-2">No doctors configured</h2>
+          <p className="text-gray-600">Add a doctor record to begin receiving consultation requests.</p>
+        </div>
       </div>
     );
   }
