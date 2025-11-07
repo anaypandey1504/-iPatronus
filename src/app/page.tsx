@@ -5,7 +5,9 @@ export default function Home() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-8">
       <div className="bg-white rounded-xl shadow-lg p-10 max-w-lg w-full text-center space-y-6">
         <h1 className="text-3xl font-bold">Doctor–Patient Consultation</h1>
-        <p className="text-gray-600">Select a dashboard to get started</p>
+        <p className="text-base font-medium text-gray-600">
+          Select a dashboard to get started
+        </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Link
             href="/patient"
