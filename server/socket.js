@@ -8,16 +8,18 @@ const PORT = process.env.PORT || 3001;
 const app = express();
 app.use(
   cors({
-    origin: ['https://i-patronus-gdjg.vercel.app', 'http://localhost:3000'],
+    origin: ['https://i-patronus.vercel.app', 'http://localhost:3000'],
     methods: ['GET', 'POST'],
+    credentials: true,
   })
 );
 
 const httpServer = http.createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: ['https://i-patronus-gdjg.vercel.app', 'http://localhost:3000'],
+    origin: ['https://i-patronus.vercel.app', 'http://localhost:3000'],
     methods: ['GET', 'POST'],
+    credentials: true,
   },
 });
 
