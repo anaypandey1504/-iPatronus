@@ -53,7 +53,7 @@ io.on('connection', (socket) => {
 });
 
 app.get('/', (_req, res) => {
-  res.send('Socket server is running');
+  res.send('✅ iPatronus backend is running!');
 });
 
 httpServer.listen(PORT, () => {
