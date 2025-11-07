@@ -10,6 +10,7 @@ app.use(
   cors({
     origin: ['https://i-patronus.vercel.app', 'http://localhost:3000'],
     methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type'],
     credentials: true,
   })
 );
@@ -21,10 +22,12 @@ const io = new Server(httpServer, {
     methods: ['GET', 'POST'],
     credentials: true,
   },
+  transports: ['websocket'],
+  allowEIO3: true,
 });
 
 io.on('connection', (socket) => {
-  console.log(`Client connected: ${socket.id}`);
+  console.log(`✅ Client connected: ${socket.id}`);
 
   socket.on('join-room', (roomId) => {
     if (roomId) {
@@ -45,7 +48,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
-    console.log(`Client disconnected: ${socket.id}`);
+    console.log(`❌ Client disconnected: ${socket.id}`);
   });
 });
 
@@ -54,7 +57,7 @@ app.get('/', (_req, res) => {
 });
 
 httpServer.listen(PORT, () => {
-  console.log(`Socket server running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
 
 

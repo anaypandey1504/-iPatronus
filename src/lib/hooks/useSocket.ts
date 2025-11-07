@@ -19,7 +19,11 @@ export function useSocket() {
 
     const newSocket = io(SOCKET_SERVER_URL, {
       transports: ['websocket'],
-      withCredentials: false,
+      withCredentials: true,
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 2000,
+      reconnectionDelayMax: 5000,
     });
 
     setSocket(newSocket);
