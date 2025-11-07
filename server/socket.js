@@ -6,12 +6,18 @@ const { Server } = require('socket.io');
 const PORT = process.env.PORT || 3001;
 
 const app = express();
-app.use(cors({ origin: '*' }));
+app.use(
+  cors({
+    origin: ['https://i-patronus-gdjg.vercel.app', 'http://localhost:3000'],
+    methods: ['GET', 'POST'],
+  })
+);
 
 const httpServer = http.createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: '*',
+    origin: ['https://i-patronus-gdjg.vercel.app', 'http://localhost:3000'],
+    methods: ['GET', 'POST'],
   },
 });
 
