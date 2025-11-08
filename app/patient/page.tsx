@@ -73,9 +73,12 @@ export default function PatientDashboard() {
       setRequestedDoctorId(null);
 
       if (roomUrl) {
-        router.push(`/call/${roomName}?url=${encodeURIComponent(roomUrl)}`);
+        router.push(`/call?url=${encodeURIComponent(roomUrl)}`);
       } else {
-        router.push(`/call/${roomName}`);
+        console.error('Unable to start video call: missing room URL');
+        if (typeof window !== 'undefined') {
+          alert('Unable to start video call');
+        }
       }
     };
 

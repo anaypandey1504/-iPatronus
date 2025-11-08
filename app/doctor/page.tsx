@@ -125,37 +125,30 @@ export default function DoctorDashboard() {
     }
 
     try {
-      const res = await fetch('/api/sessions', {
+      const res = await fetch('/api/daily/create-room', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          doctorId: user.id,
-          patientId: connectionRequest.patientId,
-        }),
       });
 
       const data = await res.json();
 
-      if (!res.ok) {
-        throw new Error(data.message || 'Failed to create session');
+      if (!res.ok || !data?.url) {
+        throw new Error(data?.error || 'Unable to start video call');
       }
 
       socket.emit('CALL_ACCEPTED', {
         doctorId: user.id,
         patientId: connectionRequest.patientId,
-        roomName: data.session.roomId,
-        roomUrl: data.roomUrl,
+        roomName: data?.name,
+        roomUrl: data.url,
       });
 
       setConnectionRequest(null);
 
-      if (data.roomUrl) {
-        router.push(`/call/${data.session.roomId}?url=${encodeURIComponent(data.roomUrl)}`);
-      } else {
-        router.push(`/call/${data.session.roomId}`);
-      }
+      router.push(`/call?url=${encodeURIComponent(data.url)}`);
     } catch (error) {
       console.error('Failed to handle connection:', error);
+      // Optionally show UI notification here
     }
   }
 
