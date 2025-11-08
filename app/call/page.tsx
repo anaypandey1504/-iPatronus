@@ -1,9 +1,27 @@
 "use client";
+export const dynamic = "force-dynamic";
 
-import { useEffect, useMemo, useRef } from "react";
+import { Suspense, useEffect, useMemo, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 
 export default function CallPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-gray-900 text-white">
+          <div className="text-center space-y-3">
+            <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-500 mx-auto" />
+            <p className="text-lg">Loading video session...</p>
+          </div>
+        </div>
+      }
+    >
+      <CallContent />
+    </Suspense>
+  );
+}
+
+function CallContent() {
   const searchParams = useSearchParams();
   const url = useMemo(() => searchParams.get("url") || "", [searchParams]);
   const iframeRef = useRef<HTMLIFrameElement>(null);
